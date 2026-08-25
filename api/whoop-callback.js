@@ -4,7 +4,16 @@ export default async function handler(req, res) {
   if (!code) return res.status(400).send('Missing code parameter.');
   const clientId     = process.env.WHOOP_CLIENT_ID;
   const clientSecret = process.env.WHOOP_CLIENT_SECRET;
-  const redirectUri  = process.env.WHOOP_REDIRECT_URI;
+  // The token exchange must send back the EXACT redirect_uri string used at
+  // the authorize step. The browser built that as
+  // `window.location.origin + '/api/whoop-callback'`, and WHOOP sent the user
+  // here using it -- so the host we were reached on reconstructs it exactly.
+  // Deriving it beats trusting WHOOP_REDIRECT_URI, which silently breaks the
+  // exchange whenever it differs by a trailing slash, scheme, or subdomain.
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const derived = host ? proto + '://' + host + '/api/whoop-callback' : '';
+  const redirectUri = derived || process.env.WHOOP_REDIRECT_URI;
   if (!clientId || !clientSecret || !redirectUri) {
     return res.status(500).send('Server not configured (missing WHOOP_* env vars).');
   }
